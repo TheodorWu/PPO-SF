@@ -1,0 +1,6 @@
+{
+  "game": "SuperStreetFighterII-Snes",
+  "state": "RyuvsKen",
+  "observation_length" : 4,
+  "num_epochs": 1000
+}
