@@ -1,0 +1,16 @@
+{
+  "info": {
+    "healthKen": {
+      "address": 1905,
+      "type": "|u1"
+    },
+    "healthRyu": {
+      "address": 1329,
+      "type": "|u1"
+    },
+    "score": {
+      "address": 5988,
+      "type": ">n6"
+    }
+  }
+}

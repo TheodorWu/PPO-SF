@@ -1,0 +1,30 @@
+{
+  "done": {
+    "variables": {
+      "healthKen": {
+        "op": "equal",
+        "reference": 255
+      },
+      "healthRyu": {
+          "op": "equal",
+          "reference": 255
+        }
+    }
+  },
+  "reward": {
+    "variables": {
+      "score": {
+        "measurement": "delta",
+        "reward": 0.001
+      },
+      "healthRyu": {
+        "measurement": "delta",
+        "penalty": 0.8
+      },
+      "healthKen": {
+        "measurement": "delta",
+        "penalty": -1.0
+      }
+    }
+  }
+}
