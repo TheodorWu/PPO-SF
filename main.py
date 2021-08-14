@@ -19,7 +19,7 @@ torch.autograd.set_detect_anomaly(True)
 
 def main():
     """This will be the main loop, creating the environment and starting the PPO algorithm"""
-
+    # TODO: refactoring
     print("Loading hyperparameters...")
     params = load_hparams()
 
@@ -59,31 +59,33 @@ def main():
 
     print("Starting main loop")
     global_step = 0
+    global_update_step = 0
     obs = env.reset()
     obs = Image.fromarray(obs, 'RGB')
 
-    # init policy values for current observations
-    actions = torch.zeros(horizon, device=device)
-    action_dists = torch.zeros(horizon, env.action_space.n, device=device)
-    log_probs = torch.zeros(horizon, device=device)
-    q_values = torch.zeros(horizon, device=device)
-    masks = torch.zeros(horizon, device=device)
-    states = torch.zeros(horizon, 512, device=device)
-    rewards = torch.zeros(horizon, device=device)
-
-    # init ground truth policy values before update
-    batch_log_probs = torch.zeros(horizon, device=device)
-    batch_advantage_estimates = torch.zeros(horizon, device=device)
-
     for epoch in range(num_epochs):
         print(f"-------- Epoch {epoch} -------------")
+        # init ground truth policy values before update
+        batch_log_probs = torch.zeros(horizon, device=device)
+        batch_advantage_estimates = torch.zeros(horizon, device=device)
         for i_update in range(params['updates_per_epoch']+1): # adding one since first run collects samples
+
+            # init policy values for current observations
+            actions = torch.zeros(horizon, device=device)
+            action_dists = torch.zeros(horizon, env.action_space.n, device=device)
+            log_probs = torch.zeros(horizon, device=device)
+            q_values = torch.zeros(horizon, device=device)
+            masks = torch.zeros(horizon, device=device)
+            states = torch.zeros(horizon, 512, device=device)
+            rewards = torch.zeros(horizon, device=device)
+
             if i_update > 0:
                 print(f"Update {i_update}")
             else:
                 print("Gathering comparison batch")
 
             ### Gather experience
+            # TODO: Threading
             for step in range(horizon):
                 # choose best action according to policy
                 features = feature_extractor.extract_features(obs)
@@ -117,9 +119,6 @@ def main():
                 masks[step] = 0 if done else 1
                 log_probs[step] = torch.log(action_dist[action])
 
-                if params['log_results']:
-                    log.add_scalar("Reward", rew, global_step)
-
                 if done:
                     env.reset()
 
@@ -127,7 +126,7 @@ def main():
 
             if i_update == 0:
                 # collected first batch -> reference policy
-                batch_log_probs = log_probs.clone()
+                batch_log_probs = log_probs.detach().clone()
                 batch_advantage_estimates, _ = gae.generalized_advantage_estimation(q_values, rewards, masks)
             else:
                 # update step
@@ -135,17 +134,29 @@ def main():
 
                 print("Updating actor")
                 actor_loss = ppo.clipped_surrogate_loss(log_probs, batch_log_probs, advantage_estimates)
+
                 actor_optim.zero_grad()
                 actor_loss.backward(retain_graph=True)
                 actor_optim.step()
 
                 print("Updating critic")
                 critic_loss = MSELoss()(q_values, batch_advantage_estimates)
+
                 critic_optim.zero_grad()
                 critic_loss.backward()
                 critic_optim.step()
 
+                if params['log_results']:
+                    log.add_scalar("ActorLoss", actor_loss.item(), global_update_step)
+                    log.add_scalar("CriticLoss", critic_loss.item(), global_update_step)
+                    log.add_scalar("MeanAdvantageEstimates", torch.mean(advantage_estimates).item(), global_update_step)
+                    log.add_scalar("MeanRewards", torch.mean(rewards).item(), global_update_step)
+
+                global_update_step += 1
+
     ppo.alpha -= 1.0/num_epochs
+
+    # TODO: save checkpoint
 
     # obs.show()
     env.close()
