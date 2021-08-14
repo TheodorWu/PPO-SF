@@ -23,6 +23,7 @@ def main():
     print("Loading hyperparameters...")
     params = load_hparams()
 
+    # TODO: copy hparams.json to log dir
     if params['log_results']:
         logdir = f"{BASE_DIR}/log/{datetime.now().strftime('%Y%m%d-%H%M%S')}"
         log = SummaryWriter(logdir)
@@ -157,6 +158,7 @@ def main():
     ppo.alpha -= 1.0/num_epochs
 
     # TODO: save checkpoint
+    # TODO: save output video every nth epoch
 
     # obs.show()
     env.close()
