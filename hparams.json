@@ -2,5 +2,6 @@
   "game": "SuperStreetFighterII-Snes",
   "state": "RyuvsKen",
   "observation_length" : 3,
-  "num_epochs": 1000
+  "explore_steps": 100,
+  "log_results": false
 }
