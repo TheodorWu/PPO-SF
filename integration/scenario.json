@@ -13,10 +13,6 @@
   },
   "reward": {
     "variables": {
-      "score": {
-        "measurement": "delta",
-        "reward": 0.001
-      },
       "healthRyu": {
         "measurement": "delta",
         "penalty": 0.8

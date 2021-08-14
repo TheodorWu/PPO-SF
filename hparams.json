@@ -2,6 +2,16 @@
   "game": "SuperStreetFighterII-Snes",
   "state": "RyuvsKen",
   "observation_length" : 3,
-  "explore_steps": 100,
-  "log_results": false
+  "horizon": 32,
+  "epochs": 5,
+  "updates_per_epoch": 10,
+  "log_results": false,
+  "learning_rate": 0.005,
+  "gae": {
+    "gamma": 0.99,
+    "gae_lambda": 0.95
+  },
+  "ppo": {
+    "epsilon": 0.1
+  }
 }
