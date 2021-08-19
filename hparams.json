@@ -5,8 +5,10 @@
   "horizon": 32,
   "epochs": 5,
   "updates_per_epoch": 10,
+  "video_every": 5,
   "log_results": false,
   "learning_rate": 0.005,
+  "workers": 4,
   "gae": {
     "gamma": 0.99,
     "gae_lambda": 0.95

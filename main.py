@@ -1,8 +1,11 @@
 from datetime import datetime
+from shutil import copy
+
 import numpy as np
 import retro
 import os
 import torch.cuda
+import torch.multiprocessing as mp
 from torch.nn import MSELoss
 from torch.utils.tensorboard import SummaryWriter
 
@@ -23,16 +26,17 @@ def main():
     print("Loading hyperparameters...")
     params = load_hparams()
 
-    # TODO: copy hparams.json to log dir
+    logdir = "."
     if params['log_results']:
         logdir = f"{BASE_DIR}/log/{datetime.now().strftime('%Y%m%d-%H%M%S')}"
         log = SummaryWriter(logdir)
+        copy(f"{BASE_DIR}/hparams.json", f"{logdir}/hparams.json")
 
     print("Accessing GPU...")
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     print("Starting environment...")
-    env = retro.make(game=params['game'], state=params['state'])
+    env = retro.make(game=params['game'], state=params['state'], record=logdir)
     env = SFDiscretizer(env)
 
     observation_length = params['observation_length']
@@ -61,6 +65,8 @@ def main():
     print("Starting main loop")
     global_step = 0
     global_update_step = 0
+    runs = 0
+    cumulative_reward = 0.0
     obs = env.reset()
     obs = Image.fromarray(obs, 'RGB')
 
@@ -117,10 +123,14 @@ def main():
                 actions[step] = action
                 action_dists[step] = action_dist
                 rewards[step] = rew
+                cumulative_reward += rew
                 masks[step] = 0 if done else 1
                 log_probs[step] = torch.log(action_dist[action])
 
                 if done:
+                    if params['log_results']:
+                        log.add_scalar("Cumulative reward", cumulative_reward, runs)
+                    runs += 1
                     env.reset()
 
                 global_step += 1
@@ -155,11 +165,26 @@ def main():
 
                 global_update_step += 1
 
-    ppo.alpha -= 1.0/num_epochs
+        ppo.alpha -= 1.0/num_epochs
 
-    # TODO: save checkpoint
-    # TODO: save output video every nth epoch
+        if params['log_results']:
+            print("Saving checkpoints")
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': actor.state_dict(),
+                'optimizer_state_dict': actor_optim.state_dict(),
+                'loss': critic_loss,
+                }, f"{logdir}/checkpoint_{epoch}/actor.pt")
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': critic.state_dict(),
+                'optimizer_state_dict': critic_optim.state_dict(),
+                'loss': critic_loss,
+                }, f"{logdir}/checkpoint_{epoch}/critic.pt")
 
+    print("Saving trained models")
+    torch.save(actor.state_dict(), f"{logdir}/model/actor.pt")
+    torch.save(critic.state_dict(), f"{logdir}/model/critic.pt")
     # obs.show()
     env.close()
     print("Done!")
