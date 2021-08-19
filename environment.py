@@ -12,7 +12,10 @@ def make_env(game, state, rank, logdir, seed=0):
     :param rank: (int) index of the subprocess
     """
     def _init():
-        env = retro.make(game=game, state=state, record=logdir)
+        if logdir:
+            env = retro.make(game=game, state=state, record=logdir)
+        else:
+            env = retro.make(game=game, state=state)
         env = SFDiscretizer(env)
         env.seed(seed + rank)
         return env

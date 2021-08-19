@@ -38,7 +38,7 @@ def main():
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     print(f"Starting environments for {num_workers} workers...")
-    envs = SubprocVecEnv([make_env(params['game'], params['state'], i, logdir) for i in range(num_workers)])
+    envs = SubprocVecEnv([make_env(params['game'], params['state'], i, None) if i > 0 else make_env(params['game'], params['state'], i, logdir) for i in range(num_workers)])
 
     observation_length = params['observation_length']
     horizon = params['horizon']
@@ -81,30 +81,31 @@ def main():
             log_probs, q_values, rewards, masks, crew = collect_experience(envs, feature_extractor, actor, critic, horizon, observation_length, num_workers, device)
             cumulative_reward = torch.mean(crew)
 
-
-
             if i_update == 0:
                 # collected first batch -> reference policy
                 batch_log_probs = torch.mean(log_probs, dim=0).detach().clone()
                 batch_advantage_estimates, _ = gae.generalized_advantage_estimation(torch.mean(q_values, dim=0), torch.mean(rewards, dim=0), masks[0])
             else:
+                actor_loss = 0
+                critic_loss = 0
                 for i in range(num_workers):
                     # update step
                     _, advantage_estimates = gae.generalized_advantage_estimation(q_values[i], rewards[i], masks[i])
 
-                    actor_loss = ppo.clipped_surrogate_loss(log_probs[i], batch_log_probs, advantage_estimates)
+                    actor_loss += ppo.clipped_surrogate_loss(log_probs[i], batch_log_probs, advantage_estimates)
 
-                    critic_loss = MSELoss()(q_values[i], batch_advantage_estimates)
-
+                    critic_loss += MSELoss()(q_values[i], batch_advantage_estimates)
 
                 print("Updating actor")
-                actor_loss = torch.mean(actor_loss)
+                actor_loss = actor_loss / num_workers
+                print(f"Actor loss {actor_loss.item()}")
                 actor_optim.zero_grad()
                 actor_loss.backward(retain_graph=True)
                 actor_optim.step()
 
                 print("Updating critic")
-                critic_loss = torch.mean(critic_loss)
+                critic_loss = critic_loss / num_workers
+                print(f"Critic loss {critic_loss.item()}")
 
                 critic_optim.zero_grad()
                 critic_loss.backward()
@@ -137,6 +138,8 @@ def main():
                 }, f"{logdir}/checkpoint_{epoch}/critic.pt")
 
     print("Saving trained models")
+    if not os.path.exists(f"{logdir}/model"):
+        os.makedirs(f"{logdir}/model")
     torch.save(actor.state_dict(), f"{logdir}/model/actor.pt")
     torch.save(critic.state_dict(), f"{logdir}/model/critic.pt")
     # obs.show()
