@@ -67,15 +67,15 @@ def main():
     global_update_step = 0
 
     for epoch in range(num_epochs):
-        print(f"-------- Epoch {epoch} -------------")
+        print(f"[{datetime.now().strftime('%Y%m%d-%H%M%S')}] -------- Epoch {epoch} -------------")
         # init ground truth policy values before update
         batch_log_probs = torch.zeros(horizon, num_workers, device=device)
         batch_advantage_estimates = torch.zeros(horizon, num_workers, device=device)
         for i_update in range(params['updates_per_epoch']+1): # adding one since first run collects samples
             if i_update > 0:
-                print(f"Update {i_update}")
+                print(f"[{datetime.now().strftime('%Y%m%d-%H%M%S')}] Update {i_update}")
             else:
-                print("Gathering comparison batch")
+                print(f"[{datetime.now().strftime('%Y%m%d-%H%M%S')}]Gathering comparison batch")
 
             ### Gather experience
             log_probs, q_values, rewards, masks, crew = collect_experience(envs, feature_extractor, actor, critic, horizon, observation_length, num_workers, device)
@@ -96,16 +96,16 @@ def main():
 
                     critic_loss += MSELoss()(q_values[i], batch_advantage_estimates)
 
-                print("Updating actor")
+                print(f"[{datetime.now().strftime('%Y%m%d-%H%M%S')}] Updating actor")
                 actor_loss = actor_loss / num_workers
-                print(f"Actor loss {actor_loss.item()}")
+                print(f"[{datetime.now().strftime('%Y%m%d-%H%M%S')}] Actor loss {actor_loss.item()}")
                 actor_optim.zero_grad()
                 actor_loss.backward(retain_graph=True)
                 actor_optim.step()
 
-                print("Updating critic")
+                print(f"[{datetime.now().strftime('%Y%m%d-%H%M%S')}] Updating critic")
                 critic_loss = critic_loss / num_workers
-                print(f"Critic loss {critic_loss.item()}")
+                print(f"[{datetime.now().strftime('%Y%m%d-%H%M%S')}] Critic loss {critic_loss.item()}")
 
                 critic_optim.zero_grad()
                 critic_loss.backward()
@@ -123,7 +123,9 @@ def main():
         ppo.alpha -= 1.0/num_epochs
 
         if params['log_results']:
-            print("Saving checkpoints")
+            print(f"[{datetime.now().strftime('%Y%m%d-%H%M%S')}] Saving checkpoints")
+            if not os.path.exists(f"{logdir}/checkpoint_{epoch}"):
+                os.makedirs(f"{logdir}/checkpoint_{epoch}")
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': actor.state_dict(),
@@ -137,14 +139,14 @@ def main():
                 'loss': critic_loss,
                 }, f"{logdir}/checkpoint_{epoch}/critic.pt")
 
-    print("Saving trained models")
+    print(f"[{datetime.now().strftime('%Y%m%d-%H%M%S')}] Saving trained models")
     if not os.path.exists(f"{logdir}/model"):
         os.makedirs(f"{logdir}/model")
     torch.save(actor.state_dict(), f"{logdir}/model/actor.pt")
     torch.save(critic.state_dict(), f"{logdir}/model/critic.pt")
     # obs.show()
     envs.close()
-    print("Done!")
+    print(f"[{datetime.now().strftime('%Y%m%d-%H%M%S')}] Done!")
 
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@
   "state": "RyuvsKen",
   "observation_length" : 3,
   "horizon": 64,
-  "epochs": 50,
+  "epochs": 100,
   "updates_per_epoch": 10,
   "video_every": 5,
   "log_results": true,
