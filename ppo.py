@@ -53,7 +53,7 @@ def collect_experience(envs, feature_extractor, actor, critic, horizon, observat
         # choose best action according to policy
         features = [feature_extractor.extract_features(o) for o in obs]
         action_dist = [actor(f) for f in features]
-        action = [torch.multinomial(a, 1) for a in action_dist]  # sample action based on probabilities from softmax output of actor
+        action = np.array([torch.multinomial(a, 1).item() for a in action_dist])  # sample action based on probabilities from softmax output of actor
 
         # collect a few frames and calculate mean based on action
         obs, rew, done, _info = envs.step(action)
@@ -68,18 +68,18 @@ def collect_experience(envs, feature_extractor, actor, critic, horizon, observat
             rew += nrew
             num_obs += 1
             done = np.logical_or(done, ndone)
-            if any(ndone):
-                break
+            # if any(ndone): # not needed since they reset automatically
+            #     break
         obs /= num_obs
         obs = [Image.fromarray(o, 'RGB') for o in obs]
 
         # store information gained from current step
         q_values[step] = torch.stack([critic(f) for f in features]).squeeze()
         states[step] = torch.stack(features)
-        actions[step] = torch.stack(action).squeeze()
+        actions[step] = torch.from_numpy(action)
         action_dists[step] = torch.stack(action_dist)
         rewards[step] = torch.tensor(rew)
-        cumulative_reward += rew
+        cumulative_reward += torch.from_numpy(rew).to(device)
         masks[step] = torch.tensor([0 if d else 1 for d in done])
         log_probs[step] = torch.log(torch.stack([action_dist[i][a.item()] for i, a in enumerate(action)]))
 
