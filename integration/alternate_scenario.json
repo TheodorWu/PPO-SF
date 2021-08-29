@@ -1,0 +1,21 @@
+{
+  "done": {
+    "variables": {
+      "healthKen": {
+        "op": "equal",
+        "reference": 255
+      },
+      "healthRyu": {
+          "op": "equal",
+          "reference": 255
+        }
+    }
+  },
+  "reward": {
+    "variables": {
+      "score": {
+        "reward": 0.001
+      }
+    }
+  }
+}

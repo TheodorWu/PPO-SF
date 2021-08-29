@@ -13,7 +13,6 @@ from utils import load_hparams
 from torch.optim import Adam
 from stable_baselines3.common.vec_env import SubprocVecEnv
 
-
 BASE_DIR = os.path.dirname(os.path.realpath(__file__))
 torch.autograd.set_detect_anomaly(True)
 
