@@ -19,12 +19,13 @@ torch.autograd.set_detect_anomaly(True)
 
 
 def main():
-    """This will be the main loop, creating the environment and starting the PPO algorithm"""
-    # TODO: refactoring
+    """This is the main loop, creating the environment and starting the PPO algorithm"""
     print("Loading hyperparameters...")
     params = load_hparams()
 
     num_workers = params['workers']
+
+    # setup logging dir and copy hparams.json
     logdir = "."
     if params['log_results']:
         logdir = f"{BASE_DIR}/log/{datetime.now().strftime('%Y%m%d-%H%M%S')}"
@@ -35,11 +36,14 @@ def main():
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     print(f"Starting environments for {num_workers} workers...")
-    envs = SubprocVecEnv([make_env(params['game'], params['state'], i, None) if i > 0 else make_env(params['game'], params['state'], i, logdir) for i in range(num_workers)])
+    # creates vectorized environments that allow parallel execution of the game
+    # envs = SubprocVecEnv([make_env(params['game'], params['state'], i, None) if i > 0 else make_env(params['game'], params['state'], i, logdir) for i in range(num_workers)])
+    envs = SubprocVecEnv([make_env(params['game'], params['state'], i, None) for i in range(num_workers)])
 
     observation_length = params['observation_length']
     horizon = params['horizon']
     num_epochs = params['epochs']
+    num_iterations = params['iterations']
 
     alpha = 1.0 # will be reduced during training, linearly annealed
     ppo = PPO(params['ppo']['epsilon'], alpha, device)
@@ -63,79 +67,80 @@ def main():
     print("Starting main loop")
     global_update_step = 0
 
-    for epoch in range(num_epochs):
-        print(f"[{datetime.now().strftime('%Y.%m.%d-%H:%M:%S')}] -------- Epoch {epoch} -------------")
-        # init ground truth policy values before update
-        batch_log_probs = torch.zeros(horizon, num_workers, device=device)
-        batch_advantage_estimates = torch.zeros(horizon, num_workers, device=device)
-        for i_update in range(params['updates_per_epoch']+1): # adding one since first run collects samples
-            if i_update > 0:
-                print(f"[{datetime.now().strftime('%Y.%m.%d-%H:%M:%S')}] Update {i_update}")
-            else:
-                print(f"[{datetime.now().strftime('%Y.%m.%d-%H:%M:%S')}]Gathering comparison batch")
+    for iteration in range(num_iterations):
+        print(f"[{datetime.now().strftime('%Y.%m.%d-%H:%M:%S')}] -------- Iteration {iteration} -------------")
+        # Interact with the environment
+        log_probs, q_values, rewards, masks, crew, states, actions = collect_experience(envs, feature_extractor, actor, critic, horizon, observation_length, num_workers, device)
+        cumulative_reward = torch.mean(crew)
 
-            ### Gather experience
-            log_probs, q_values, rewards, masks, crew = collect_experience(envs, feature_extractor, actor, critic, horizon, observation_length, num_workers, device)
-            cumulative_reward = torch.mean(crew)
+        # reference policy
+        batch_log_probs = torch.mean(log_probs, dim=0).detach().clone()
+        _, batch_advantage_estimates = gae.generalized_advantage_estimation(torch.mean(q_values, dim=0), torch.mean(rewards, dim=0), torch.mean(masks, dim=0))
 
-            if i_update == 0:
-                # collected first batch -> reference policy
-                batch_log_probs = torch.mean(log_probs, dim=0).detach().clone()
-                batch_advantage_estimates, _ = gae.generalized_advantage_estimation(torch.mean(q_values, dim=0), torch.mean(rewards, dim=0), torch.mean(masks, dim=0))
-            else:
-                actor_loss = 0
-                critic_loss = 0
-                for i in range(num_workers):
-                    # update step
-                    _, advantage_estimates = gae.generalized_advantage_estimation(q_values[i], rewards[i], masks[i])
+        for k in range(num_epochs):
+            print(f"[{datetime.now().strftime('%Y.%m.%d-%H:%M:%S')}] Update {k+1}")
+            current_q_values = torch.zeros(num_workers, horizon, device=device)
+            current_log_probs = torch.zeros(num_workers, horizon, device=device)
 
-                    actor_loss += ppo.clipped_surrogate_loss(log_probs[i], batch_log_probs, advantage_estimates)
+            actor_loss = torch.tensor([0.0], requires_grad=True, device=device)
+            critic_loss = torch.tensor([0.0], requires_grad=True, device=device)
+            for i in range(num_workers):
+                # update step
+                current_q_values[i] = torch.tensor([critic(s) for s in states[i]])
+                action_dist = [actor(s) for s in states[i]]
+                current_log_probs[i] = torch.log(torch.tensor([action_dist[j][a.item()] for j, a in enumerate(actions[i])]))
 
-                    critic_loss += MSELoss()(q_values[i], batch_advantage_estimates)
+                _, advantage_estimates = gae.generalized_advantage_estimation(current_q_values[i], rewards[i], masks[i])
 
-                print(f"[{datetime.now().strftime('%Y.%m.%d-%H:%M:%S')}] Updating actor")
-                actor_loss = actor_loss / num_workers
-                print(f"[{datetime.now().strftime('%Y.%m.%d-%H:%M:%S')}] Actor loss {actor_loss.item()}")
-                actor_optim.zero_grad()
-                actor_loss.backward(retain_graph=True)
-                actor_optim.step()
+                actor_loss = actor_loss + ppo.clipped_surrogate_loss(current_log_probs[i], batch_log_probs, advantage_estimates)
 
-                print(f"[{datetime.now().strftime('%Y.%m.%d-%H:%M:%S')}] Updating critic")
-                critic_loss = critic_loss / num_workers
-                print(f"[{datetime.now().strftime('%Y.%m.%d-%H:%M:%S')}] Critic loss {critic_loss.item()}")
+                critic_loss = critic_loss + MSELoss()(current_q_values[i], batch_advantage_estimates)
 
-                critic_optim.zero_grad()
-                critic_loss.backward()
-                critic_optim.step()
+            print(f"[{datetime.now().strftime('%Y.%m.%d-%H:%M:%S')}] Updating actor")
+            actor_loss = actor_loss / num_workers
+            print(f"[{datetime.now().strftime('%Y.%m.%d-%H:%M:%S')}] Actor loss {actor_loss.item()}")
+            actor_optim.zero_grad()
+            actor_loss.backward(retain_graph=True)
+            actor_optim.step()
 
-                if params['log_results']:
-                    log.add_scalar("ActorLoss", actor_loss.item(), global_update_step)
-                    log.add_scalar("CriticLoss", critic_loss.item(), global_update_step)
-                    log.add_scalar("MeanAdvantageEstimates", torch.mean(advantage_estimates).item(), global_update_step)
-                    log.add_scalar("MeanRewards", torch.mean(rewards[i]).item(), global_update_step)
-                    log.add_scalar("MeanCumulativeReward", cumulative_reward.item(), global_update_step)
+            print(f"[{datetime.now().strftime('%Y.%m.%d-%H:%M:%S')}] Updating critic")
+            critic_loss = critic_loss / num_workers
+            print(f"[{datetime.now().strftime('%Y.%m.%d-%H:%M:%S')}] Critic loss {critic_loss.item()}")
 
-                    global_update_step += 1
+            critic_optim.zero_grad()
+            critic_loss.backward()
+            critic_optim.step()
 
-        ppo.alpha -= 1.0/num_epochs
+            if params['log_results']:
+                log.add_scalar("ActorLoss", actor_loss.item(), global_update_step)
+                log.add_scalar("CriticLoss", critic_loss.item(), global_update_step)
+                log.add_scalar("MeanAdvantageEstimates", torch.mean(advantage_estimates).item(), global_update_step)
+                log.add_scalar("MeanRewards", torch.mean(rewards[i]).item(), global_update_step)
+                log.add_scalar("MeanCumulativeReward", cumulative_reward.item(), global_update_step)
 
-        if params['log_results']:
+                global_update_step += 1
+
+        ppo.alpha -= 1.0/num_iterations
+
+        # checkpoint every 10 iterations
+        if params['log_results'] and (num_iterations % 10 == 0):
             print(f"[{datetime.now().strftime('%Y.%m.%d-%H:%M:%S')}] Saving checkpoints")
-            if not os.path.exists(f"{logdir}/checkpoint_{epoch}"):
-                os.makedirs(f"{logdir}/checkpoint_{epoch}")
+            if not os.path.exists(f"{logdir}/checkpoint_{iteration}"):
+                os.makedirs(f"{logdir}/checkpoint_{iteration}")
             torch.save({
-                'epoch': epoch,
+                'epoch': iteration,
                 'model_state_dict': actor.state_dict(),
                 'optimizer_state_dict': actor_optim.state_dict(),
-                'loss': critic_loss,
-                }, f"{logdir}/checkpoint_{epoch}/actor.pt")
+                'loss': actor_loss,
+                }, f"{logdir}/checkpoint_{iteration}/actor.pt")
             torch.save({
-                'epoch': epoch,
+                'epoch': iteration,
                 'model_state_dict': critic.state_dict(),
                 'optimizer_state_dict': critic_optim.state_dict(),
                 'loss': critic_loss,
-                }, f"{logdir}/checkpoint_{epoch}/critic.pt")
+                }, f"{logdir}/checkpoint_{iteration}/critic.pt")
 
+    # save trained models
     print(f"[{datetime.now().strftime('%Y.%m.%d-%H:%M:%S')}] Saving trained models")
     if not os.path.exists(f"{logdir}/model"):
         os.makedirs(f"{logdir}/model")

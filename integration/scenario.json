@@ -13,13 +13,8 @@
   },
   "reward": {
     "variables": {
-      "healthRyu": {
-        "measurement": "delta",
-        "penalty": 0.8
-      },
-      "healthKen": {
-        "measurement": "delta",
-        "penalty": -1.0
+      "score": {
+        "reward": 0.001
       }
     }
   }

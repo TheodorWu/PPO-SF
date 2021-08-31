@@ -2,22 +2,21 @@ import os
 from datetime import datetime
 from shutil import copy
 
-import numpy as np
-from PIL import Image
 import torch
 from stable_baselines3.common.vec_env import SubprocVecEnv
 from stable_baselines3 import A2C, PPO, DQN
 
 from environment import make_env
-from model import FeatureExtractor
 from utils import load_hparams
 
 BASE_DIR = os.path.dirname(os.path.realpath(__file__))
 
 if __name__ == '__main__':
-    print("Starting baseline comparison")
+    print("Starting baseline training")
     params = load_hparams()
     num_workers = params['workers']
+
+    # setup logging
     logdir = None
     if params['log_results']:
         logdir = f"{BASE_DIR}/log/{datetime.now().strftime('%Y%m%d-%H%M%S')}"
@@ -29,9 +28,7 @@ if __name__ == '__main__':
     # envs = SubprocVecEnv([make_env(params['game'], params['state'], i, None) if i > 0 else make_env(params['game'], params['state'], i, logdir) for i in range(num_workers)])
     envs = SubprocVecEnv([make_env(params['game'], params['state'], i, None) if i > 0 else make_env(params['game'], params['state'], i, logdir) for i in range(1)])
 
-    print("Loading feature extractor...")
-    feature_extractor = FeatureExtractor(device)
-
+    # load, train and save an already implemented agent
     model = A2C("MlpPolicy",
                 envs,
                 learning_rate=params['learning_rate'],
@@ -54,5 +51,5 @@ if __name__ == '__main__':
     #             gamma=params['gae']['gamma'],
     #             verbose=1,
     #             tensorboard_log=logdir)
-    model.learn(total_timesteps=params['epochs']*params['horizon']*params['updates_per_epoch']*num_workers)
+    model.learn(total_timesteps=params['epochs']*params['horizon']*params['iterations']*num_workers)
     model.save(f"{logdir}/a2c_SF")

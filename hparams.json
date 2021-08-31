@@ -1,13 +1,13 @@
 {
   "game": "SuperStreetFighterII-Snes",
   "state": "RyuvsKen",
+  "reward_function": "score",
   "observation_length" : 3,
   "horizon": 128,
-  "epochs": 250,
-  "updates_per_epoch": 15,
-  "video_every": 25,
+  "epochs": 10,
+  "iterations": 500,
   "log_results": true,
-  "learning_rate": 0.005,
+  "learning_rate": 0.01,
   "workers": 4,
   "gae": {
     "gamma": 0.99,

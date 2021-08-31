@@ -6,6 +6,7 @@ from torchvision.models import resnet34
 from torch.autograd import Variable
 
 class FeatureExtractor:
+    """Pretrained resnet34 for feature extraction"""
     def __init__(self, device):
         self.model = resnet34(pretrained=True)
         self.device = device
@@ -13,6 +14,7 @@ class FeatureExtractor:
         self.layer = self.model._modules.get('avgpool')
         self.model.eval()
 
+        #  these lines come from the official pytorch documentation https://pytorch.org/vision/stable/models.html
         self.transforms = T.Compose([T.Resize(256), T.CenterCrop(224), T.ToTensor()])
 
         self.normalize = T.Normalize(mean=[0.485, 0.456, 0.406],
@@ -20,6 +22,7 @@ class FeatureExtractor:
 
 
     def extract_features(self, obs):
+        """Forward passes the observation through the resnet"""
         tensor_obs = Variable(self.transforms(obs).unsqueeze(0)).to(self.device)
         feature_emb = torch.zeros(512).to(self.device)
 
@@ -33,6 +36,7 @@ class FeatureExtractor:
         return feature_emb
 
 class Actor(nn.Module):
+    """Actor network"""
     def __init__(self, num_actions):
         super(Actor, self).__init__()
 
@@ -50,6 +54,7 @@ class Actor(nn.Module):
         return x
 
 class Critic(nn.Module):
+    """Critic network"""
     def __init__(self):
         super(Critic, self).__init__()
 

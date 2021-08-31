@@ -40,12 +40,12 @@ class SFDiscretizer(Discretizer):
         dpad = [['LEFT'], ['RIGHT'], ['UP'], ['DOWN']]
         dpad_combos = [['LEFT', 'UP'], ['LEFT', 'DOWN'], ['RIGHT', 'UP'], ['RIGHT', 'DOWN']]
         buttons = [['A'],['B'],['X'],['Y'],['L'],['R']]
-        button_combos = [['LEFT', 'X'], ['LEFT', 'Y'], ['LEFT', 'L'], # Forward + any Punch
-                         ['RIGHT', 'X'], ['RIGHT', 'Y'], ['RIGHT', 'L'], # Forward + any Punch
-                         ['LEFT', 'DOWN', 'X'], ['LEFT', 'DOWN', 'Y'], ['LEFT', 'DOWN', 'L'], # Down Forward + any Punch
-                         ['RIGHT', 'DOWN', 'X'], ['RIGHT', 'DOWN', 'Y'], ['RIGHT', 'DOWN', 'L'], # Down Forward + any Punch
-                         ['LEFT', 'A'], ['LEFT', 'B'], ['LEFT', 'R'], # Forward + any Kick
-                         ['RIGHT', 'A'], ['RIGHT', 'B'], ['RIGHT', 'R'] # Forward + any Kick
+        button_combos = [['LEFT', 'X'], ['LEFT', 'Y'], ['LEFT', 'L'],  # Forward + any Punch
+                         ['RIGHT', 'X'], ['RIGHT', 'Y'], ['RIGHT', 'L'],  # Forward + any Punch
+                         ['LEFT', 'DOWN', 'X'], ['LEFT', 'DOWN', 'Y'], ['LEFT', 'DOWN', 'L'],  # Down Forward + any Punch
+                         ['RIGHT', 'DOWN', 'X'], ['RIGHT', 'DOWN', 'Y'], ['RIGHT', 'DOWN', 'L'],  # Down Forward + any Punch
+                         ['LEFT', 'A'], ['LEFT', 'B'], ['LEFT', 'R'],  # Forward + any Kick
+                         ['RIGHT', 'A'], ['RIGHT', 'B'], ['RIGHT', 'R']  # Forward + any Kick
                          ]
 
         combos = dpad + dpad_combos + buttons + button_combos
